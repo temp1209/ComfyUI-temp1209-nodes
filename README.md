@@ -1,6 +1,6 @@
 # ComfyUI-temp1209-nodes
 
-Personal custom nodes and server-side helpers for ComfyUI, built up incrementally rather than designed upfront. Shared here as-is in case any piece is useful to someone else — expect a few personal-machine assumptions (see "Notes" below).
+Personal custom nodes and server-side helpers for ComfyUI, built up incrementally rather than designed upfront. Shared here as-is in case any piece is useful to someone else.
 
 ## Nodes
 
@@ -16,8 +16,8 @@ Personal custom nodes and server-side helpers for ComfyUI, built up incrementall
 
 ## Notes
 
-- `server.py` also registers a `/temp1209/launch_mosaic_tool` route that shells out to a separate personal tool at a hardcoded path — irrelevant to anyone else, left in only because it doesn't hurt to have an unreachable-for-you route sitting there. Delete that block if you don't want it.
 - No install script / `requirements.txt` beyond what ComfyUI itself already provides (Pillow, numpy, aiohttp) — nothing extra to install.
+- `__init__.py` optionally imports a local `local_extras.py` if one exists (`try`/`except ImportError`, silently skipped otherwise) — a place for machine-specific routes/nodes that shouldn't ship in a shared repo like this one.
 
 ## Adding a new node
 

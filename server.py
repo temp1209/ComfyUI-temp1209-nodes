@@ -1,15 +1,10 @@
 import os
 import re
-import subprocess
-from pathlib import Path
 
 from aiohttp import web
 from server import PromptServer
 
 import folder_paths
-
-APP_DIR = Path("E:/Document/pixiv-mosaic-flow/app")
-VENV_PYTHON = APP_DIR / ".venv" / "Scripts" / "python.exe"
 
 DATE_FOLDER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 RECENT_DATE_FOLDERS = 7
@@ -81,21 +76,3 @@ async def list_output_files_recursive(request):
 
     entries.sort(key=lambda e: -e[0])
     return web.json_response([f"{rel} [output]" for _mtime, rel in entries])
-
-
-@PromptServer.instance.routes.post("/temp1209/launch_mosaic_tool")
-async def launch_mosaic_tool(request):
-    if not VENV_PYTHON.exists():
-        return web.json_response(
-            {"status": "error", "message": f"venv python not found: {VENV_PYTHON}"},
-            status=500,
-        )
-    try:
-        subprocess.Popen(
-            [str(VENV_PYTHON), "main.py"],
-            cwd=str(APP_DIR),
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-        )
-        return web.json_response({"status": "ok"})
-    except Exception as e:
-        return web.json_response({"status": "error", "message": str(e)}, status=500)

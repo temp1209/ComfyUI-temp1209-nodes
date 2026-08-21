@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+
+# Personal, machine-specific extras - not for the public repo
+local_extras.py
+web/pixiv_mosaic_button.js
