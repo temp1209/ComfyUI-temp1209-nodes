@@ -1,0 +1,6 @@
+[project]
+name = "comfyui-temp1209-nodes"
+version = "0.1.0"
+description = "Personal ComfyUI custom nodes: prompt-embedding save/load, date-folder output organization, and a couple of small workflow-building utilities."
+license = "MIT"
+requires-python = ">=3.10"
