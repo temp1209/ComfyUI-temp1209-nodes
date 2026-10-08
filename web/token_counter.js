@@ -11,6 +11,10 @@
 // node (chunking.py) splits at commas like A1111. Click the badge for a
 // per-chunk breakdown with any tag straddling a boundary highlighted.
 //
+// Other UIs (e.g. temp1209-studio) can opt a textarea in by setting
+// data-t1209-tokens="standard|break|smart" - that value is used as the mode,
+// since such a textarea isn't a widget of any node in the open graph.
+//
 // Legacy Graph-mode textareas (Nodes 2.0 off) are intentionally skipped:
 // they're absolutely positioned over the canvas, so an in-flow badge would
 // land in the wrong place.
@@ -79,7 +83,12 @@ function detectMode(node) {
 	return "standard";
 }
 
+function modeOf(ta) {
+	return ta.dataset.t1209Tokens || detectMode(nodeOf(ta));
+}
+
 function isPromptTextarea(ta) {
+	if (ta.dataset.t1209Tokens) return true;
 	if (!ta.closest(".lg-node-widget")) return false;
 	const node = nodeOf(ta);
 	// Nodes inside subgraphs aren't reachable by id from the root graph -
@@ -165,7 +174,7 @@ async function count(ta) {
 	const st = attached.get(ta);
 	if (!st) return;
 	const text = ta.value;
-	const mode = detectMode(nodeOf(ta));
+	const mode = modeOf(ta);
 	const key = cacheKey(mode, text);
 	st.lastKey = key;
 	try {
@@ -211,14 +220,14 @@ function ensureBadge(ta) {
 }
 
 function scan() {
-	for (const ta of document.querySelectorAll(".lg-node-widget textarea")) {
+	for (const ta of document.querySelectorAll(".lg-node-widget textarea, textarea[data-t1209-tokens]")) {
 		if (ta.offsetParent && isPromptTextarea(ta)) ensureBadge(ta);
 	}
 	for (const [ta, st] of attached) {
 		if (!ta.isConnected) {
 			st.badge.remove();
 			attached.delete(ta);
-		} else if (cacheKey(detectMode(nodeOf(ta)), ta.value) !== st.lastKey) {
+		} else if (cacheKey(modeOf(ta), ta.value) !== st.lastKey) {
 			// Programmatic changes (workflow load, autocomplete insert, rewiring) don't fire input.
 			schedule(ta);
 		}
