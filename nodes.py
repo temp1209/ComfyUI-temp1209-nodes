@@ -9,6 +9,8 @@ from PIL.PngImagePlugin import PngInfo
 
 import folder_paths
 
+from .chunking import smart_tokenize
+
 KEY_POSITIVE = "temp1209_positive"
 KEY_NEGATIVE = "temp1209_negative"
 KEY_SEED = "temp1209_seed"
@@ -190,11 +192,38 @@ class SmartStringConcatenate:
         return (f"{string_a}{delimiter}{string_b}",)
 
 
+class CLIPTextEncodeSmartChunk:
+    """CLIP Text Encode with A1111-style chunking: when a 75-token chunk
+    fills up, the tag in progress is moved whole into the next chunk
+    (backtracking to the last comma) instead of being cut mid-tag, and
+    BREAK forces a chunk boundary. Everything else - weights, embeddings,
+    escaping - is ComfyUI's own tokenizer. See chunking.py."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True, "dynamicPrompts": True}),
+                "clip": ("CLIP",),
+            },
+        }
+
+    RETURN_TYPES = ("CONDITIONING",)
+    FUNCTION = "encode"
+    CATEGORY = "conditioning"
+
+    def encode(self, clip, text):
+        if clip is None:
+            raise RuntimeError("clip input is invalid: None")
+        return (clip.encode_from_tokens_scheduled(smart_tokenize(clip, text)),)
+
+
 NODE_CLASS_MAPPINGS = {
     "Temp1209SaveImageWithPrompt": SaveImageWithPrompt,
     "Temp1209LoadPromptFromImage": LoadPromptFromImage,
     "Temp1209DateFolderName": DateFolderName,
     "Temp1209SmartStringConcatenate": SmartStringConcatenate,
+    "Temp1209CLIPTextEncodeSmartChunk": CLIPTextEncodeSmartChunk,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -202,4 +231,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Temp1209LoadPromptFromImage": "Load Prompt From Image (temp1209)",
     "Temp1209DateFolderName": "Date Folder Name (temp1209)",
     "Temp1209SmartStringConcatenate": "Smart String Concatenate (temp1209)",
+    "Temp1209CLIPTextEncodeSmartChunk": "CLIP Text Encode Smart Chunk (temp1209)",
 }

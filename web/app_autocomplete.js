@@ -88,6 +88,39 @@ function searchTags(partialTag) {
 	return results.slice(0, MAX_RESULTS);
 }
 
+const WILDCARD_LIST_TTL_MS = 10000;
+let wildcardListCache = null;
+let wildcardListFetchedAt = 0;
+
+// Wildcard names, unlike the tag dataset above, live behind our own
+// /temp1209/wildcards route (see server.py) and can change any time the user
+// edits them in the sidebar tab (web/wildcard_editor.js) - so this is
+// re-fetched periodically rather than loaded once, but still cached briefly
+// to avoid a request on every keystroke.
+async function getWildcardNames() {
+	const now = Date.now();
+	if (wildcardListCache && now - wildcardListFetchedAt < WILDCARD_LIST_TTL_MS) return wildcardListCache;
+	try {
+		const res = await fetch("/temp1209/wildcards");
+		if (res.ok) {
+			wildcardListCache = (await res.json()).map((path) => path.replace(/\.txt$/, ""));
+			wildcardListFetchedAt = now;
+		}
+	} catch {
+		// keep serving the stale cache (or empty list) on network hiccups
+	}
+	return wildcardListCache || [];
+}
+
+function searchWildcards(partialName, names) {
+	const query = partialName.toLowerCase();
+	return names
+		.filter((name) => name.toLowerCase().includes(query))
+		.sort((a, b) => a.length - b.length || a.localeCompare(b))
+		.slice(0, MAX_RESULTS)
+		.map((name) => ({ tag: `__${name}__`, alias: [] }));
+}
+
 function relatedTagsFor(tagName) {
 	const related = [];
 	for (const source of getEnabledTagSourceInPriorityOrder()) {
@@ -100,6 +133,50 @@ function relatedTagsFor(tagName) {
 	}
 	related.sort((a, b) => b.count - a.count);
 	return related.slice(0, MAX_RELATED);
+}
+
+const MIRROR_PROPS = [
+	"boxSizing", "width", "height", "overflowX", "overflowY",
+	"borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "borderStyle",
+	"paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+	"fontStyle", "fontVariant", "fontWeight", "fontStretch", "fontSize", "lineHeight", "fontFamily",
+	"textAlign", "textTransform", "textIndent", "letterSpacing", "tabSize",
+];
+
+// Textareas have no native API for "where on screen is character N" - only
+// the whole element's bounding rect. That's fine for the short, roughly
+// one-line widgets this was first built against, but breaks down for a tall
+// multi-line textarea (e.g. the wildcard editor's sidebar tab): anchoring to
+// the element's own top/bottom corners can land the dropdown far from the
+// caret, even off past the top of the viewport. This mirrors the textarea's
+// text into an offscreen div (same font/box metrics) up to the caret, then
+// reads the resulting span's offset - the standard caret-coordinates trick.
+function getCaretCoordinates(el, position) {
+	const div = document.createElement("div");
+	const style = div.style;
+	const computed = window.getComputedStyle(el);
+
+	style.position = "absolute";
+	style.visibility = "hidden";
+	style.whiteSpace = "pre-wrap";
+	style.wordWrap = "break-word";
+	for (const prop of MIRROR_PROPS) style[prop] = computed[prop];
+
+	document.body.appendChild(div);
+	div.textContent = el.value.slice(0, position);
+	const span = document.createElement("span");
+	span.textContent = el.value.slice(position) || ".";
+	div.appendChild(span);
+
+	const elRect = el.getBoundingClientRect();
+	const coords = {
+		left: elRect.left + span.offsetLeft - el.scrollLeft,
+		top: elRect.top + span.offsetTop - el.scrollTop,
+		bottom: elRect.top + span.offsetTop + span.offsetHeight - el.scrollTop,
+	};
+
+	document.body.removeChild(div);
+	return coords;
 }
 
 function getCurrentToken(el) {
@@ -130,6 +207,7 @@ class Dropdown {
 		this.related = related;
 		this.onPick = onPick;
 		this.selectedIndex = 0;
+		this.caret = getCaretCoordinates(el, token.end);
 
 		this.root = document.createElement("div");
 		this.root.className = "temp1209-autocomplete";
@@ -186,14 +264,16 @@ class Dropdown {
 	}
 
 	position() {
-		const rect = this.el.getBoundingClientRect();
-		this.root.style.left = rect.left + "px";
-		this.root.style.minWidth = Math.min(rect.width, 320) + "px";
-		const spaceBelow = window.innerHeight - rect.bottom;
-		if (spaceBelow > 150 || spaceBelow > rect.top) {
-			this.root.style.top = rect.bottom + 2 + "px";
+		const caret = this.caret;
+		const maxWidth = 320;
+		this.root.style.left = Math.min(caret.left, window.innerWidth - maxWidth - 4) + "px";
+		this.root.style.minWidth = "200px";
+		this.root.style.maxWidth = maxWidth + "px";
+		const spaceBelow = window.innerHeight - caret.bottom;
+		if (spaceBelow > 150 || spaceBelow > caret.top) {
+			this.root.style.top = caret.bottom + 2 + "px";
 		} else {
-			this.root.style.bottom = window.innerHeight - rect.top + 2 + "px";
+			this.root.style.bottom = window.innerHeight - caret.top + 2 + "px";
 		}
 	}
 
@@ -229,19 +309,29 @@ function closeDropdown() {
 }
 
 async function openDropdown(el) {
-	if (!dataReadyPromise) dataReadyPromise = waitForAnySourceReady();
-	const ready = await dataReadyPromise;
-	if (!ready) return;
-
 	const token = getCurrentToken(el);
 	if (!token.text) {
 		closeDropdown();
 		return;
 	}
 
-	const matches = searchTags(token.text);
-	const topTag = matches[0]?.tag;
-	const related = topTag ? relatedTagsFor(topTag).filter((r) => !matches.some((m) => m.tag === r.tag)) : [];
+	let matches = [];
+	let related = [];
+
+	if (token.text.startsWith("__")) {
+		// __name__ wildcard reference (comfyui-dynamicprompts) rather than a
+		// tag - search wildcard filenames instead of the tag dataset.
+		const partialName = token.text.slice(2).replace(/__$/, "");
+		matches = searchWildcards(partialName, await getWildcardNames());
+	} else {
+		if (!dataReadyPromise) dataReadyPromise = waitForAnySourceReady();
+		const ready = await dataReadyPromise;
+		if (!ready) return;
+
+		matches = searchTags(token.text);
+		const topTag = matches[0]?.tag;
+		related = topTag ? relatedTagsFor(topTag).filter((r) => !matches.some((m) => m.tag === r.tag)) : [];
+	}
 
 	closeDropdown();
 	if (!matches.length && !related.length) return;
