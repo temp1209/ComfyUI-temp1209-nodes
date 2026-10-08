@@ -1,4 +1,3 @@
-import copy
 import os
 import re
 
@@ -251,48 +250,6 @@ async def tokenize_prompt(request):
         "chunks": out,
         "mode": mode,
         "unresolved": unresolved,
-        "hasBreak": bool(re.search(r"BREAK", text)),
+        "hasBreak": bool(re.search(r"\bBREAK\b", text)),
     })
 
-
-# --- Hires fix from a result -------------------------------------------------
-# Backs web/hires_button.js. Given an output image, finds the run that produced
-# it in ComfyUI's (in-memory) history and returns that exact prompt with the
-# "Hire Fix" boolean switched on. Every other value - seeds, the resolved
-# wildcard text, LoRAs - stays as it was, and the hires branch sits behind a
-# lazy switch, so re-queuing it gives the same image as if hires had been on
-# from the start. History doesn't survive a ComfyUI restart, so only images
-# generated since the last start can be re-run this way.
-_HIRES_TOGGLE_TITLE = re.compile(r"hire\s*s?\s*fix", re.IGNORECASE)
-
-
-def _find_run(filename, subfolder):
-    history = PromptServer.instance.prompt_queue.get_history()
-    for item in reversed(list(history.values())):
-        for out in item.get("outputs", {}).values():
-            for img in out.get("images", []):
-                if (img.get("filename") == filename and img.get("subfolder", "") == subfolder
-                        and img.get("type", "output") == "output"):
-                    return item
-    return None
-
-
-@PromptServer.instance.routes.post("/temp1209/hires_rerun")
-async def hires_rerun(request):
-    body = await request.json()
-    item = _find_run(body.get("filename", ""), body.get("subfolder", ""))
-    if item is None:
-        return web.json_response(
-            {"error": "この画像の生成記録が見つかりません（ComfyUIを再起動する前に生成した画像は使えません）"}, status=404)
-    prompt = copy.deepcopy(item["prompt"][2])
-    toggles = [n for n in prompt.values()
-               if n.get("class_type") == "PrimitiveBoolean" and _HIRES_TOGGLE_TITLE.search(n.get("_meta", {}).get("title", ""))]
-    if not toggles:
-        return web.json_response({"error": "このワークフローには「Hire Fix」という名前のブール値が見つかりません"}, status=400)
-    if all(n["inputs"].get("value") for n in toggles):
-        return web.json_response({"error": "この画像はすでにHires fixありで生成されています"}, status=409)
-    for n in toggles:
-        n["inputs"]["value"] = True
-    old_extra = item["prompt"][3] or {}
-    extra_data = {k: v for k, v in old_extra.items() if k in ("extra_pnginfo",)}
-    return web.json_response({"prompt": prompt, "extra_data": extra_data})

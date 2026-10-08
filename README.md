@@ -21,10 +21,6 @@ Personal custom nodes and server-side helpers for ComfyUI, built up incrementall
 
 - **Live token count under prompt textareas** in App Mode / Nodes 2.0 — e.g. `323 tok · 5チャンク · 区切りまで残り52 · ⚠途中分割2`. The chunking shown follows whichever encode node the prompt flows into (core CLIP Text Encode, clip-with-break's BREAK node, or Smart Chunk above), found by walking the graph downstream. Core ComfyUI cuts hard at 75 tokens, so a tag can end up split across two chunks; click the badge for a per-chunk breakdown with such tags highlighted. Legacy Graph-mode textareas (Nodes 2.0 off) are not covered.
 
-## Hires fix button (`web/hires_button.js`)
-
-- **One-click "✨ Hires fix" on the App Mode result view** — re-queues the run that produced the displayed image with its `Hire Fix` boolean (a `PrimitiveBoolean` titled "Hire Fix") switched on, via `POST /temp1209/hires_rerun`. Seeds, resolved wildcards and LoRAs are taken from that run's history entry, and the hires branch sits behind a lazy switch, so the result matches what the image would have been with hires on from the start. Only works for images generated since the last ComfyUI start (history is in-memory). The job is registered with App Mode's internal execution store so its result shows up in App Mode (frontend-internal API, checked against frontend 1.49.6).
-
 ## Sidebar tab (`web/wildcard_editor.js`)
 
 - **Wildcard editor** — Adds a "ワイルドカード" tab to ComfyUI's sidebar for browsing, editing, creating, and deleting the `__name__` wildcard files above, without leaving the app or opening them on disk. Supports subfolders (`__category/name__`).
