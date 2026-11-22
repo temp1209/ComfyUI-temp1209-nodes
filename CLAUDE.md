@@ -9,5 +9,5 @@ ComfyUIの自作カスタムノード（プロンプトの埋め込みの保存�
 
 ## 動かす場所
 - 編集とコミットは、`dev` のこのフォルダで行う。GPUが無いので、ここでは生成できない。
-- 生成を伴うテストは、メインPCの**テスト用ComfyUI**（本番とは別のポート・custom_nodes・output）で行う。コードは `git push test master` で届ける。手順と注意は `dev-notes/ComfyUI-テスト環境.md`。使い終わったら止める。
-- **本番のComfyUI（メインPC）には、本人の合図があるまで反映しない。** 反映後の再起動は、生成中でないことを確かめてから。
+- 生成を伴うテストは、メインPCの**テスト用ComfyUI**（本番とは別のポート・custom_nodes・output）で行う。コードは `git push test dev` で届ける。手順と注意は `dev-notes/ComfyUI-テスト環境.md`。使い終わったら止める。
+- **ブランチ**：普段の開発は `dev`。`master` は本番用で、本番のComfyUIは起動のたびに `master` を自動で取り込む（`--ff-only`）。**`master` へのマージ・pushは、本人の合図があったときだけ**（`dev` を `master` へ早送りでマージしてpush）。反映は本人の次の再起動で入る。
